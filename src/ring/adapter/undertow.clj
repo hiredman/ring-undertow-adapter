@@ -93,16 +93,26 @@
 
 ;;; Adapter stuff
 
-(defn- proxy-handler
+(defn handler-fun
   "Returns an Undertow HttpHandler implementation for the given Ring handler."
   [handler]
+  (fn [^HttpHandler this ^HttpServerExchange exchange]
+    ;; based on http://undertow.io/documentation/undertow-handler-guide.html
+    (if (.isInIoThread exchange)
+      (.dispatch exchange this)
+      (do
+        (.startBlocking exchange)
+        (let [request-map (build-exchange-map exchange)
+              response-map (handler request-map)]
+          (set-exchange-response exchange response-map))))))
+
+(defn make-handler
+  "Returns an Undertow HttpHandler implementation for the given Ring handler."
+  [fun]
   (reify
     HttpHandler
-    (handleRequest [_ exchange]
-      (.startBlocking exchange)
-      (let [request-map (build-exchange-map exchange)
-            response-map (handler request-map)]
-        (set-exchange-response exchange response-map)))))
+    (handleRequest [this exchange]
+      (fun this exchange))))
 
 
 (defn ^Undertow run-undertow
@@ -120,8 +130,7 @@
   (let [b (Undertow/builder)]
     (.addListener b (options :port 80)
                     (options :host "localhost"))
-    (.setHandler b (proxy-handler handler))
-
+    (.setHandler b (make-handler (handler-fun handler)))
     (when-let [io-threads (:io-threads options)]
       (.setIoThreads b io-threads))
     (when-let [worker-threads (:worker-threads options)]
