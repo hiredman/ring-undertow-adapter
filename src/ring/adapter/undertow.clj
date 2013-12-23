@@ -94,7 +94,6 @@
 ;;; Adapter stuff
 
 (defn handler-fun
-  "Returns an Undertow HttpHandler implementation for the given Ring handler."
   [handler]
   (fn [^HttpHandler this ^HttpServerExchange exchange]
     ;; based on http://undertow.io/documentation/undertow-handler-guide.html
